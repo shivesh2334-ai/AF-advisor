@@ -40,6 +40,21 @@ export default function AIAdvisor() {
         body: JSON.stringify({ messages: newMessages }),
       });
 
+      if (!res.ok) {
+        let errorMsg = `Server error (${res.status})`;
+        try {
+          const errBody = await res.json();
+          if (errBody.error) errorMsg = errBody.error;
+        } catch {
+          // response was not JSON, use default message
+        }
+        throw new Error(errorMsg);
+      }
+
+      if (!res.body) {
+        throw new Error('Response body is empty.');
+      }
+
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let full = '';

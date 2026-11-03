@@ -23,10 +23,11 @@ export default function AIAdvisor() {
 
   async function send(text) {
     const userMsg = text || input.trim();
-    if (!userMsg) return;
+    if (!userMsg || loading) return;
     setInput('');
 
-    const newMessages = [...messages, { role: 'user', content: userMsg }];
+    const history = messages.filter(m => !m.error && !m.streaming).map(({ role, content }) => ({ role, content }));
+    const newMessages = [...history, { role: 'user', content: userMsg }];
     setMessages(newMessages);
     setLoading(true);
 
@@ -78,7 +79,7 @@ export default function AIAdvisor() {
     } catch (e) {
       setMessages(m => {
         const copy = [...m];
-        copy[copy.length - 1] = { role: 'assistant', content: 'Error: ' + e.message, streaming: false };
+        copy[copy.length - 1] = { role: 'assistant', content: 'Error: ' + e.message, streaming: false, error: true };
         return copy;
       });
     } finally {
@@ -98,7 +99,7 @@ export default function AIAdvisor() {
           <p className="text-slate-400 text-xs">NICE NG196 · Powered by Claude</p>
         </div>
         <span className="ml-auto flex items-center gap-1.5 text-xs text-green-400">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse-slow"></span>Online
+          <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse-slow"></span>{loading ? 'Responding' : 'Ready'}
         </span>
       </div>
 

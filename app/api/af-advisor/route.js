@@ -1,5 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 
+export const maxDuration = 60;
+
 export const dynamic = 'force-dynamic';
 
 const SYSTEM_PROMPT = `You are an expert cardiologist and AF (Atrial Fibrillation) specialist advising a cardiology team on clinical decision-making. You have deep expertise in the NICE AF guidelines (NG196) and apply them rigorously.
@@ -48,27 +50,33 @@ export async function POST(req) {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const stream = await client.messages.stream({
-      model: 'claude-sonnet-4-20250514',
+      model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
       messages,
     });
 
+    // Await provider acceptance before sending HTTP headers, so errors remain JSON.
+    const iterator = stream[Symbol.asyncIterator]();
+    const first = await iterator.next();
     const encoder = new TextEncoder();
     const readable = new ReadableStream({
       async start(controller) {
         try {
-          for await (const chunk of stream) {
+          let next = first;
+          while (!next.done) {
+            const chunk = next.value;
             if (
               chunk.type === 'content_block_delta' &&
               chunk.delta?.type === 'text_delta'
             ) {
               controller.enqueue(encoder.encode(chunk.delta.text));
             }
+            next = await iterator.next();
           }
           controller.close();
         } catch (streamErr) {
-          console.error('Stream error:', streamErr);
+          console.error('AF advisor stream failed', { status: streamErr.status });
           controller.error(streamErr);
         }
       },
@@ -82,9 +90,16 @@ export async function POST(req) {
       },
     });
   } catch (err) {
-    console.error(err);
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
+    console.error('AF advisor provider failed', { status: err.status });
+    const error = err.status === 404
+      ? 'The configured AI model is unavailable. Please contact the administrator.'
+      : err.status === 401 || err.status === 403
+      ? 'AI provider authentication failed. Please contact the administrator.'
+      : err.status === 429
+      ? 'The AI provider is busy or its usage limit has been reached. Please try again later.'
+      : 'The AI service is temporarily unavailable. Please try again.';
+    return new Response(JSON.stringify({ error }), {
+      status: err.status === 429 ? 429 : 503,
       headers: { 'Content-Type': 'application/json' },
     });
   }

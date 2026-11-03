@@ -1,7 +1,3 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  env: {
-    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-  },
-};
-module.exports = nextConfig;
+// Provider credentials are read only by the server route at runtime.
+module.exports = {};
